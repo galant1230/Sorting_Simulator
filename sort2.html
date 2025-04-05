@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>Merge + Quick Sort 動畫模擬器</title>
+  <style>
+    body { font-family: sans-serif; background: #f5f5f5; padding: 2rem; }
+    .container { background: #fff; padding: 2rem; max-width: 960px; margin: auto; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    .highlight { background-color: #4caf50; color: white; }
+    table { width: 100%; margin-top: 1rem; border-collapse: collapse; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    .code-box { background: #272822; color: #f8f8f2; padding: 1rem; border-radius: 6px; margin-top: 1rem; font-family: monospace; white-space: pre-wrap; }
+    .active-code { background-color: #444; }
+    .analysis { background: #eef7ff; padding: 1rem; margin-top: 1rem; border-left: 5px solid #007acc; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h2>MergeSort / QuickSort 動畫模擬器</h2>
+  <select id="algoSelect" onchange="init()">
+    <option value="merge">🧵 MergeSort</option>
+    <option value="quick">⚡ QuickSort</option>
+  </select>
+  <input type="text" id="arrayInput" value="5,3,8,4,2">
+  <button onclick="init()">🔃 重設</button>
+  <button onclick="step()">🧭 下一步</button>
+
+  <table>
+    <thead><tr><th>索引</th><th>值</th><th>狀態</th></tr></thead>
+    <tbody id="arrayTable"></tbody>
+  </table>
+
+  <div id="subarrayBox" class="analysis"></div>
+  <div class="code-box" id="codeBox"></div>
+  <div class="analysis" id="analysisBox"></div>
+</div>
+
+<script>
+let arr = [], ops = [], algo = 'merge';
+let mergeState = null;
+let quickStack = [], quickState = null;
+
+function safeGet(id) {
+  return document.getElementById(id);
+}
+
+function updateSubarrays(L, R, mode = '', info = '', l = null, r = null) {
+  const box = safeGet("subarrayBox");
+  if (!box) return;
+  box.innerHTML = `
+    <strong>🔍 子陣列狀態</strong><br>
+    模式：${mode}<br>
+    ${info ? info + '<br>' : ''}
+    ${l !== null && r !== null ? `索引範圍：l = ${l}, r = ${r}<br>` : ''}
+    左陣列 (L)：[${L.join(', ')}]<br>
+    右陣列 (R)：[${R.join(', ')}]
+  `;
+}
+
+function highlight(line) {
+  const code = safeGet("codeBox");
+  if (!code) return;
+  code.innerHTML = code.innerHTML.split('\n').map((ln, idx) => {
+    return "<span class='" + (idx + 1 === line ? "active-code" : "") + "'>" + ln + "</span>";
+  }).join('\n');
+}
+
+function renderTable(iPtr = -1, jPtr = -1, pivotPtr = -1) {
+  const tbody = safeGet("arrayTable");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+  arr.forEach((val, idx) => {
+    const row = document.createElement("tr");
+    const t1 = document.createElement("td");
+    const t2 = document.createElement("td");
+    const t3 = document.createElement("td");
+    t1.textContent = idx;
+    t2.textContent = val;
+    let tags = [];
+    if (idx === iPtr) tags.push("🔵 i");
+    if (idx === jPtr) tags.push("🔴 j");
+    if (idx === pivotPtr) tags.push("🎯 pivot");
+    t3.textContent = tags.join(" ");
+    if (tags.length > 0) t2.classList.add("highlight");
+    row.appendChild(t1); row.appendChild(t2); row.appendChild(t3);
+    tbody.appendChild(row);
+  });
+}
+
+function init() {
+  const arrayInput = safeGet("arrayInput");
+  const algoSelect = safeGet("algoSelect");
+  if (!arrayInput || !algoSelect) return;
+
+  arr = arrayInput.value.split(',').map(Number);
+  algo = algoSelect.value;
+  mergeState = null;
+  quickStack = [];
+  quickState = null;
+  updateSubarrays([], []);
+  ops = [];
+
+  if (algo === 'merge') {
+    mergeSortOps(0, arr.length - 1);
+    updateCode('merge');
+    updateAnalysis('merge');
+  } else {
+    quickStack.push([0, arr.length - 1]);
+    updateCode('quick');
+    updateAnalysis('quick');
+  }
+
+  renderTable();
+}
+
+function step() {
+  if (algo === 'merge') {
+    if (!mergeState && ops.length > 0) {
+      const { l, m, r } = ops.pop();
+      const L = arr.slice(l, m + 1);
+      const R = arr.slice(m + 1, r + 1);
+      mergeState = { l, m, r, L, R, i: 0, j: 0, k: l, state: 'compare' };
+      updateSubarrays(L, R, "MergeSort", `mid = ${m}`, l, r);
+      highlight(13);
+      renderTable(l, r);
+    } else if (mergeState) {
+      let { L, R, i, j, k, l, r, state } = mergeState;
+      if (state === 'compare') {
+        if (i < L.length && j < R.length) {
+          if (L[i] <= R[j]) {
+            arr[k++] = L[i++];
+            highlight(15);
+          } else {
+            arr[k++] = R[j++];
+            highlight(17);
+          }
+        } else {
+          mergeState.state = 'leftoverL';
+        }
+      } else if (state === 'leftoverL') {
+        if (i < L.length) {
+          arr[k++] = L[i++];
+          highlight(19);
+        } else {
+          mergeState.state = 'leftoverR';
+        }
+      } else if (state === 'leftoverR') {
+        if (j < R.length) {
+          arr[k++] = R[j++];
+          highlight(20);
+        } else {
+          mergeState = null;
+          highlight(6);
+          renderTable();
+          return;
+        }
+      }
+      mergeState.i = i;
+      mergeState.j = j;
+      mergeState.k = k;
+      renderTable(l, r);
+    }
+  }
+
+  if (algo === 'quick') {
+    if (!quickState && quickStack.length > 0) {
+      const [low, high] = quickStack.pop();
+      if (low >= high) return;
+      quickState = { low, high, i: low, j: low, pivot: arr[high], done: false };
+
+      // 在第一次切割時，只顯示正在進行 partition，尚未顯示 L 和 R
+      updateSubarrays([], [], "正在做 partition", `pivot = ${arr[high]}`, low, high);
+      highlight(9);  // 標示當前進行的操作
+      renderTable(low, low, high);
+    } else if (quickState && !quickState.done) {
+      let s = quickState;
+      if (s.j < s.high) {
+        if (arr[s.j] <= s.pivot) {
+          [arr[s.i], arr[s.j]] = [arr[s.j], arr[s.i]];
+          s.i++;
+        }
+        s.j++;
+
+        // 在進行 partition 過程時，不顯示 L 和 R
+        updateSubarrays([], [], "正在做 partition", `pivot = ${s.pivot}`, s.low, s.high);
+        highlight(13);  // 標示當前進行的操作
+        renderTable(s.i, s.j, s.high);
+      } else {
+        // 完成 partition，將 pivot 放到正確位置
+        [arr[s.i], arr[s.high]] = [arr[s.high], arr[s.i]];
+        quickStack.push([s.low, s.i - 1]);
+        quickStack.push([s.i + 1, s.high]);
+        quickState = null;
+
+        // 在 partition 完成後，顯示 L 和 R
+        const L = arr.slice(s.low, s.i);  // 小於等於 pivot 的部分
+        const R = arr.slice(s.i + 1, s.high + 1);  // 大於 pivot 的部分
+        updateSubarrays(L, R, "QuickSort", `pivot = ${arr[s.i]}`, s.low, s.high);
+
+        highlight(17);  // 完成的操作標示
+        renderTable();
+      }
+    }
+  }
+}
+
+function mergeSortOps(l, r) {
+  if (l < r) {
+    const m = Math.floor((l + r) / 2);
+    ops.push({ l, m, r });
+    mergeSortOps(m + 1, r);
+    mergeSortOps(l, m);
+  }
+}
+
+function updateCode(type) {
+  const code = safeGet("codeBox");
+  if (!code) return;
+  if (type === 'merge') {
+    code.innerHTML = `
+1: void mergeSort(int arr[], int l, int r) {
+2:   if (l < r) {
+3:     int m = (l + r) / 2;
+4:     mergeSort(arr, l, m);
+5:     mergeSort(arr, m + 1, r);
+6:     merge(arr, l, m, r);
+7:   }
+8: }
+
+9: void merge(...) {
+10: int L[], R[];
+11: copy to L and R;
+12: int i = 0, j = 0, k = l;
+13: while (i < L.length && j < R.length) {
+14:   if (L[i] <= R[j])
+15:     arr[k++] = L[i++];
+16:   else
+17:     arr[k++] = R[j++];
+18: }
+19: while (i < L.length) arr[k++] = L[i++];
+20: while (j < R.length) arr[k++] = R[j++];
+21: }`;
+  } else {
+    code.innerHTML = `
+1: void quickSort(int arr[], int low, int high) {
+2:   if (low < high) {
+3:     int pi = partition(arr, low, high);
+4:     quickSort(arr, low, pi - 1);
+5:     quickSort(arr, pi + 1, high);
+6:   }
+7: }
+
+8: int partition(int arr[], int low, int high) {
+9:   int pivot = arr[high];
+10:  int i = low;
+11:  for (int j = low; j < high; j++) {
+12:    if (arr[j] <= pivot) {
+13:      swap(arr[i], arr[j]);
+14:      i++;
+15:    }
+16:  }
+17:  swap(arr[i], arr[high]);
+18:  return i;
+19: }`;
+  }
+}
+
+function updateAnalysis(type) {
+  const box = safeGet("analysisBox");
+  if (!box) return;
+  if (type === 'merge') {
+    box.innerHTML = `<strong>🧠 MergeSort 分析</strong><br>
+    時間複雜度：O(n log n)<br>
+    空間複雜度：O(n)<br>
+    穩定性：穩定排序`;
+  } else {
+    box.innerHTML = `<strong>🧠 QuickSort 分析</strong><br>
+    時間複雜度：O(n log n) 平均，O(n²) 最差<br>
+    空間複雜度：O(log n)<br>
+    穩定性：不穩定`;
+  }
+}
+
+window.onload = () => {
+  if (
+    safeGet("arrayInput") &&
+    safeGet("algoSelect") &&
+    safeGet("arrayTable") &&
+    safeGet("codeBox") &&
+    safeGet("analysisBox") &&
+    safeGet("subarrayBox")
+  ) {
+    init();
+  }
+};
+</script>
+</body>
+</html>
+
+    
+    
+
+
+    
+
